@@ -22,7 +22,7 @@ boost::thread_group grp;
 namespace po = boost::program_options;
 
 bool storageLock;
-std::list<pcl::PointCloud<pcl::PointXYZ> > storage;
+std::list<pcl::PCLPointCloud2> storage;
 
 std::string pcdprefix;
 std::string pcdpath;
@@ -52,13 +52,11 @@ struct OutputOp {
 };
 
 //! pcl topic callback
-void pclMsgCallback(const sensor_msgs::PointCloud2ConstPtr& pclMsg)
+void pclMsgCallback(const pcl::PCLPointCloud2::ConstPtr& pclMsg)
 {
     if (storageLock)
         return;
-    pcl::PointCloud<pcl::PointXYZ> pclCloud;
-    pcl::fromROSMsg(*pclMsg, pclCloud);
-    storage.push_back(pclCloud);
+    storage.push_back(*pclMsg);
     ROS_INFO_STREAM("Recv " << recvNum++);
     if (partitionSize != 0) {
         if (recvNum % partitionSize == 0) {
@@ -77,11 +75,11 @@ void pclMsgCallback(const sensor_msgs::PointCloud2ConstPtr& pclMsg)
 void mergeAndExport(std::string path, bool toEnd)
 {
     ROS_INFO("Start merging...");
-    pcl::PointCloud<pcl::PointXYZ> cloudOut;
+    pcl::PCLPointCloud2 cloudOut;
 
-    std::list<pcl::PointCloud<pcl::PointXYZ> >::iterator it = storage.begin();
+    std::list<pcl::PCLPointCloud2>::iterator it = storage.begin();
     std::advance(it, saveStartPoint);
-    std::list<pcl::PointCloud<pcl::PointXYZ> >::iterator end = it;
+    std::list<pcl::PCLPointCloud2>::iterator end = it;
     if (toEnd) {
         end = storage.end();
     } else {
@@ -91,17 +89,20 @@ void mergeAndExport(std::string path, bool toEnd)
 
     for (; it != end; ++it) {
         cloudOut += *it;
-        it->clear();
+        it->data.clear();
+        it->width  = 0;
+        it->height = 0;
     }
-    ROS_INFO_STREAM("Merged " << cloudOut.size());
-    if (cloudOut.empty()) {
+    ROS_INFO_STREAM("Merged " << cloudOut.width * cloudOut.height);
+    if ((cloudOut.width * cloudOut.height) == 0) {
         ROS_INFO("Empty, exit.");
         return;
     }
     ROS_INFO_STREAM("Start saving, please wait...\n"
         << path);
-    pcl::io::savePCDFile(path, cloudOut, pcdbinary);
-    ROS_INFO("File save success, Good bye.");
+    pcl::PCDWriter writer;
+    writer.writeBinary(path, cloudOut);
+    ROS_INFO("File save success.");
 }
 
 //! capturing terminal sig
@@ -199,7 +200,7 @@ int main(int argc, char** argv)
     signal(SIGTERM, &exitNode);
     signal(SIGINT, &exitNode);
     storageLock = false;
-    ros::Subscriber subPointCloudMsg = nh.subscribe<sensor_msgs::PointCloud2>(topic, 2, pclMsgCallback);
+    ros::Subscriber subPointCloudMsg = nh.subscribe<pcl::PCLPointCloud2>(topic, 2, pclMsgCallback);
 
     ROS_INFO_STREAM("|Prefix:\t| " << pcdprefix);
     ROS_INFO_STREAM("|Output:\t| " << pcdpath);
