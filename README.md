@@ -1,10 +1,10 @@
-# gatherpclmsg
+# gather_msg
 The ROS package, used to gather PCL point cloud topic and save to designated path. This package listen to topic when it started and terminates when user input CTRL-C.
 If the cloud data would surpass your memory capacity. Partition feature is ready for this. For more detail, please read in Usage section.
 ## Usage
 You can read help info by
 ```bash
-rosrun gatherpclmsg gatherpclmsg  -h
+rosrun gather_msg gather_pcl_msg  -h
 Allowed options:
   -h [ --help ]               print help message
   -o [ --output ] arg         explictly output file name
@@ -15,7 +15,7 @@ Allowed options:
 ```
 In generally, the minium format of the command line like this:
 ```bash
-rosrun gatherpclmsg gatherpclmsg /velodyne_points
+rosrun gather_msg gather_pcl_msg /velodyne_points
 ```
 Listen to /velodyne_points and save to $PWD directory with the timestamp relative filename.
 

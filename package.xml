@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <package>
-  <name>gatherpclmsg</name>
+  <name>gather_msg</name>
   <version>1.0.0</version>
   <description>The ROS package, used to gather PCL point cloud topic and save to designated path. This package listen to topic when it started and terminates when user input CTRL-C.
   If the cloud data would surpass your memory capacity. Partition feature is ready for this. For more detail, please read in Usage section.</description>
@@ -45,6 +45,7 @@
   <build_depend>geometry_msgs</build_depend>
   <build_depend>nav_msgs</build_depend>
   <build_depend>roscpp</build_depend>
+  <build_depend>rosbag</build_depend>
   <build_depend>std_msgs</build_depend>
   <build_depend>sensor_msgs</build_depend>
 
@@ -52,6 +53,7 @@
   <run_depend>nav_msgs</run_depend>
   <run_depend>sensor_msgs</run_depend>
   <run_depend>roscpp</run_depend>
+  <run_depend>rosbag</run_depend>
   <run_depend>std_msgs</run_depend>
 
   <!-- The export tag contains other, unspecified, tags -->

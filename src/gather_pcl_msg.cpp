@@ -158,7 +158,7 @@ void updateFilenames()
 
 int main(int argc, char** argv)
 {
-    ros::init(argc, argv, "gatherpclmsg");
+    ros::init(argc, argv, "gather_pcl_msg");
     ros::NodeHandle nh;
     po::options_description desc("Allowed options");
     desc.add_options()("help,h", "print help message")("output,o", po::value<std::string>(), "explictly output file name")("binary,b", po::value<bool>()->default_value(true), "write binary PCD")("prefix,p", po::value<std::string>(), "output prefix")("partition,t", po::value<int>()->default_value(0), "frame num of a partition ( 0 for no parititon)")("topic", "topic which would be subscribed");

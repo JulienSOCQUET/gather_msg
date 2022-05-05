@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 2.8.3)
-project(gatherpclmsg)
+project(gather_msg)
 
 ## Find catkin macros and libraries
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
@@ -9,6 +9,11 @@ find_package(catkin REQUIRED COMPONENTS
     nav_msgs
     sensor_msgs
     roscpp
+    rosbag
+    tf2
+    tf2_ros
+    tf2_msgs
+    tf2_sensor_msgs
     std_msgs)
 find_package(PCL REQUIRED)
 find_package(Boost REQUIRED COMPONENTS
@@ -136,14 +141,20 @@ catkin_package(
 # add_dependencies(loam_gatherMap ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 
 ## Declare a C++ executable
- add_executable(gatherpclmsg src/gatherpclmsg.cpp)
+ add_executable(gather_pcl_msg src/gather_pcl_msg.cpp)
+ add_executable(gather_pcl_msg_ctslam src/gather_pcl_msg_ctslam.cpp)
 
 ## Add cmake target dependencies of the executable
 ## same as for the library above
 # add_dependencies(loam_gatherMap_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 
 ## Specify libraries to link a library or executable target against
- target_link_libraries(gatherpclmsg
+ target_link_libraries(gather_pcl_msg
+   ${catkin_LIBRARIES}
+   ${PCL_LIBRARIES}
+   ${Boost_LIBRARIES}
+ )
+ target_link_libraries(gather_pcl_msg_ctslam
    ${catkin_LIBRARIES}
    ${PCL_LIBRARIES}
    ${Boost_LIBRARIES}
@@ -164,7 +175,7 @@ catkin_package(
 # )
 
 ## Mark executables and/or libraries for installation
-install(TARGETS gatherpclmsg gatherpclmsg
+install(TARGETS gather_pcl_msg gather_pcl_msg_ctslam
 #   ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
 #   LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
    RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
