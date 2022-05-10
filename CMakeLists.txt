@@ -16,6 +16,7 @@ find_package(catkin REQUIRED COMPONENTS
     tf2_sensor_msgs
     std_msgs)
 find_package(PCL REQUIRED)
+find_package(Eigen REQUIRED)
 find_package(Boost REQUIRED COMPONENTS
     system
     filesystem
@@ -158,6 +159,7 @@ catkin_package(
    ${catkin_LIBRARIES}
    ${PCL_LIBRARIES}
    ${Boost_LIBRARIES}
+   ${Eigen_LIBRARIES}
  )
 
 #############

@@ -1,16 +1,14 @@
 #include <iostream>
 #include <fstream>
-#include <signal.h>
 #include <sstream>
 #include <string>
-#include <sys/stat.h>
 #include <stdlib.h>
 #include <limits>
 
-#include <boost/date_time/local_time/local_time.hpp>
-#include <boost/filesystem.hpp>
 #include <boost/program_options.hpp>
 #include <boost/thread.hpp>
+
+#include <Eigen/Dense>
 
 #include <pcl/point_cloud.h>
 #include <pcl_ros/point_cloud.h>
@@ -19,14 +17,21 @@
 #include <geometry_msgs/TransformStamped.h>
 #include <sensor_msgs/PointCloud2.h>
 #include <tf2_sensor_msgs/tf2_sensor_msgs.h>
+#include <tf2_eigen/tf2_eigen.h>
 
 #include "rosbag/bag.h"
 #include "rosbag/view.h"
 
 namespace po = boost::program_options;
 
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+
 // Get the next transform from the text trajectory
-bool getNextTransform(std::ifstream& traj, geometry_msgs::TransformStamped& transform) {
+bool getNextTransform(std::ifstream& traj, geometry_msgs::TransformStamped& transformStamped) {
   std::string pose;
   if(!std::getline(traj, pose))
     return false;
@@ -34,23 +39,29 @@ bool getNextTransform(std::ifstream& traj, geometry_msgs::TransformStamped& tran
   std::stringstream ssPose (pose);
   std::string item;
   std::getline(ssPose, item, ' ');
-  transform.header.stamp = ros::Time(std::stod(item));
+  transformStamped.header.stamp = ros::Time(std::stod(item));
   std::getline(ssPose, item, ' ');
-  transform.transform.translation.x = std::stod(item);
+  transformStamped.transform.translation.x = std::stod(item);
   std::getline(ssPose, item, ' ');
-  transform.transform.translation.y = std::stod(item);
+  transformStamped.transform.translation.y = std::stod(item);
   std::getline(ssPose, item, ' ');
-  transform.transform.translation.z = std::stod(item);
+  transformStamped.transform.translation.z = std::stod(item);
   std::getline(ssPose, item, ' ');
-  transform.transform.rotation.w = std::stod(item);
+  transformStamped.transform.rotation.w = std::stod(item);
   std::getline(ssPose, item, ' ');
-  transform.transform.rotation.x = std::stod(item);
+  transformStamped.transform.rotation.x = std::stod(item);
   std::getline(ssPose, item, ' ');
-  transform.transform.rotation.y = std::stod(item);
+  transformStamped.transform.rotation.y = std::stod(item);
   std::getline(ssPose, item, ' ');
-  transform.transform.rotation.z = std::stod(item);
+  transformStamped.transform.rotation.z = std::stod(item);
   return true;
 }
+
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 
 // Merge and export frames to pcd file
 void mergeAndExport(std::string bagFile, std::string topic, std::string trajFile, std::string outputFile)
@@ -58,43 +69,91 @@ void mergeAndExport(std::string bagFile, std::string topic, std::string trajFile
   std::cout << "Merge and export." << std::endl; 
   pcl::PCLPointCloud2 cloudOut;
   double deltaStamp;
-  int count = 0;
-  
-  geometry_msgs::TransformStamped transform;
+  int frameCount = 0;
+
+  // Get the first transform
+  geometry_msgs::TransformStamped transformStamped;
   std::ifstream traj (trajFile);
   if (!traj.is_open())
     return;
-  traj.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
-  getNextTransform(traj, transform);
-  
+  traj.ignore(std::numeric_limits<std::streamsize>::max(), '\n'); // Skip the first line
+  getNextTransform(traj, transformStamped);
+
+  // Read the messages from the given topic
   rosbag::Bag bag(bagFile);
   rosbag::View view(bag, rosbag::TopicQuery(topic));
-  BOOST_FOREACH(rosbag::MessageInstance const pclMsg, view)
-    {
-      sensor_msgs::PointCloud2::ConstPtr cloudPtr = pclMsg.instantiate<sensor_msgs::PointCloud2>();
-      if (cloudPtr != NULL) {
-	deltaStamp = (cloudPtr->header.stamp + 0.05 - transform.header.stamp).toSec(); // 0.05s to take the middle time of the frame
-	while(deltaStamp > 0.005) {
-	  if(!getNextTransform(traj, transform))
+  BOOST_FOREACH(rosbag::MessageInstance const pclMsg, view) {
+    sensor_msgs::PointCloud2::ConstPtr cloudPtr = pclMsg.instantiate<sensor_msgs::PointCloud2>();
+    if (cloudPtr != NULL) {	
+      pcl::PCLPointCloud2 cloudPcl;
+      pcl_conversions::toPCL(*cloudPtr, cloudPcl);
+
+      // Get the index of the fields
+      int x_idx = pcl::getFieldIndex (cloudPcl, "x");
+      int y_idx = pcl::getFieldIndex (cloudPcl, "y");
+      int z_idx = pcl::getFieldIndex (cloudPcl, "z");
+      int t_idx = pcl::getFieldIndex (cloudPcl, "t"); // TODO Add other equivalent field names to support other LiDARs
+      if (x_idx == -1 || y_idx == -1 || z_idx == -1 || t_idx == -1) {
+	std::cerr << "The points need to have x, y, z and t attributes." << std::endl;
+	return;
+      }
+	
+      // Go over all points
+      uint32_t ts; // Should be the time offset in nano seconds from the beginning of the sweep
+      int point_offset;
+      for (int col = 0; col < cloudPcl.width; ++col) {
+	// Assumes that the point cloud is organized (columns ordered by ascending timestamp)
+	// Get the local timestamp
+	point_offset = col * cloudPcl.point_step;
+	memcpy (&ts, &cloudPcl.data[point_offset + cloudPcl.fields[t_idx].offset], sizeof(uint32_t));
+
+	// Get a transform close enough in time
+	deltaStamp = (cloudPtr->header.stamp - transformStamped.header.stamp).toSec() + 1e-9 * ts;
+	while(deltaStamp > 0.005) { // Assumes a trajectory sampling at 100Hz
+	  if(!getNextTransform(traj, transformStamped))
 	    break;
-	  deltaStamp = (cloudPtr->header.stamp - transform.header.stamp).toSec();
+	  deltaStamp = (cloudPtr->header.stamp - transformStamped.header.stamp).toSec() + 1e-9 * ts;
 	}
 
-	if(abs(deltaStamp) < 0.005) {
-	  sensor_msgs::PointCloud2 cloudTf;
-	  tf2::doTransform(*cloudPtr, cloudTf, transform);
-	  pcl::PCLPointCloud2 cloudPcl;
-	  pcl_conversions::moveToPCL(cloudTf, cloudPcl);
-	  cloudOut += cloudPcl;
-	  std::cout << "Frame added: " << ++count << std::endl;
+	// Apply transform if time close enough
+	if(abs(deltaStamp) < 0.005) { // Assumes a trajectory sampling at 100Hz
+	  for (int row = 0; row < cloudPcl.height; ++row) {
+	    // Assumes that the points from a column have the same timestamp
+	    Eigen::Affine3d transform = tf2::transformToEigen(transformStamped); // TODO improve by interpolating transforms
+
+	    Eigen::Vector3d pt(*reinterpret_cast<const float *>(&cloudPcl.data[point_offset + cloudPcl.fields[x_idx].offset]),
+			       *reinterpret_cast<const float *>(&cloudPcl.data[point_offset + cloudPcl.fields[y_idx].offset]),
+			       *reinterpret_cast<const float *>(&cloudPcl.data[point_offset + cloudPcl.fields[z_idx].offset]));
+	    Eigen::Vector3f pt_out = (transform * pt).cast <float> ();
+
+	    memcpy(&cloudPcl.data[point_offset + cloudPcl.fields[x_idx].offset], &pt_out[0], sizeof(float));
+	    memcpy(&cloudPcl.data[point_offset + cloudPcl.fields[y_idx].offset], &pt_out[1], sizeof(float));
+	    memcpy(&cloudPcl.data[point_offset + cloudPcl.fields[z_idx].offset], &pt_out[2], sizeof(float));
+	    point_offset += cloudPcl.row_step;
+	  }
+	// Set point as NAN if transform time too far
 	} else {
-	  std::cout << "Warning: frame skipped." << std::endl;
+	  Eigen::Vector3f pt_out(std::numeric_limits<float>::quiet_NaN(),
+				 std::numeric_limits<float>::quiet_NaN(),
+				 std::numeric_limits<float>::quiet_NaN());
+	  for (int row = 0; row < cloudPcl.height; ++row) {
+	    memcpy(&cloudPcl.data[point_offset + cloudPcl.fields[x_idx].offset], &pt_out[0], sizeof(float));
+	    memcpy(&cloudPcl.data[point_offset + cloudPcl.fields[y_idx].offset], &pt_out[1], sizeof(float));
+	    memcpy(&cloudPcl.data[point_offset + cloudPcl.fields[z_idx].offset], &pt_out[2], sizeof(float));
+	    
+	    point_offset += cloudPcl.row_step;
+	  }
+	  std::cout << "Warning: column skipped." << std::endl;
 	}
-      }
+      }	
+      cloudOut += cloudPcl;
+      std::cout << "Frame added: " << ++frameCount << std::endl;
     }
+  }
   bag.close();
   traj.close();
 
+  // Write point cloud if not empty
   std::cout << "Merged " << cloudOut.width * cloudOut.height << " points." << std::endl;
   if ((cloudOut.width * cloudOut.height) == 0) {
     std::cout << "Point cloud empty, exit." << std::endl;
@@ -106,15 +165,21 @@ void mergeAndExport(std::string bagFile, std::string topic, std::string trajFile
   std::cout << "File saved." << std::endl;
 }
 
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+
 int main(int argc, char** argv)
 {
   po::options_description desc("Allowed options");
-  desc.add_options()("help,h", "print help message")("output,o", po::value<std::string>(), "explictly output file name")("trajectory,t", po::value<std::string>(), "trajectory used to gather the clouds")("topic", po::value<std::string>(), "topic to read the cloud msgs")("bagfile,b", "topic which would be subscribed");
+  desc.add_options()("help,h", "print help message")("output,o", po::value<std::string>(), "explictly output file name")("poses,p", po::value<std::string>(), "poses used to gather the clouds")("topic,t", po::value<std::string>(), "topic to read the cloud msgs")("bagfile", "bag file to read the cloud msgs");
   po::positional_options_description p;
   p.add("bagfile", -1);
   po::variables_map vm;
 
-  std::string outputFile, trajFile, topic, bagFile;
+  std::string outputFile, poseFile, topic, bagFile;
 
   try {
     po::store(po::command_line_parser(argc, argv).options(desc).positional(p).run(), vm);
@@ -130,10 +195,10 @@ int main(int argc, char** argv)
     outputFile = vm["output"].as<std::string>();
   } else {
     std::cout << desc << std::endl;
-    exit(0);
+    exit(0); // TODO create default output instead of exit
   }
-  if (vm.count("trajectory")) {
-    trajFile = vm["trajectory"].as<std::string>();
+  if (vm.count("poses")) {
+    poseFile = vm["poses"].as<std::string>();
   } else {
     std::cout << desc << std::endl;
     exit(0);
@@ -142,7 +207,7 @@ int main(int argc, char** argv)
     topic = vm["topic"].as<std::string>();
   } else {
     std::cout << desc << std::endl;
-    exit(0);
+    exit(0); // TODO use default topic name instead of exit
   }
   if (vm.count("bagfile")) {
     bagFile = vm["bagfile"].as<std::string>();
@@ -151,12 +216,12 @@ int main(int argc, char** argv)
     exit(0);
   }
 
-  ROS_INFO_STREAM("|Output:\t| "       << outputFile);
-  ROS_INFO_STREAM("|Trajectory:\t| " << trajFile);
-  ROS_INFO_STREAM("|Topic:\t\t| "      << topic);
-  ROS_INFO_STREAM("|Bagfile:\t| "    << bagFile);
+  ROS_INFO_STREAM("|Output:\t| "  << outputFile);
+  ROS_INFO_STREAM("|Poses:\t\t| " << poseFile);
+  ROS_INFO_STREAM("|Topic:\t\t| " << topic);
+  ROS_INFO_STREAM("|Bagfile:\t| " << bagFile);
 
-  mergeAndExport(bagFile, topic, trajFile, outputFile); 
+  mergeAndExport(bagFile, topic, poseFile, outputFile); 
   
   return 0;
 }
