@@ -25,7 +25,7 @@ Advanced, you can use '-p' or '-o' to assign other folder to save.
 '-t' argument decide frame count interval to divide into seperate partition file. This would be processed in other thread, don't worry about blocking main thread.
 
 ## gather_pcl_msg_ctslam
-This executable is used to gather PCL point clouds messages from a given topic and save the final point cloud to a designated path.
+This executable is used to gather PCL point clouds messages from a given topic of a given bag file using a given trajectory (set of poses) and save the final point cloud to a designated path.
 ```bash
 rosrun gather_msg gather_pcl_msg_ctslam  -h
 Allowed options:
@@ -38,6 +38,6 @@ Allowed options:
 For now it only supports Ouster LiDARs. The trajectory file should provide the transforms as time tx ty tz qw qx qy qz (in this specific order on one line) at a frequency of 100Hz (for now). See the source for all the assumptions.
 
 ## TODO
-Enable gather_pcl_msg and gather_pcl_msg_ctslam to gather LiDAR packets messages besides PointCloud2 messages.
-Enable gather_pcl_msg and gather_pcl_msg_ctslam to write other point cloud formats (PLY, LAS, LAZ, E57).
-See gather_pcl_msg_ctslam source code for other possible improvements.
+* Enable gather_pcl_msg and gather_pcl_msg_ctslam to gather LiDAR packets messages besides PointCloud2 messages.
+* Enable gather_pcl_msg and gather_pcl_msg_ctslam to write other point cloud formats (PLY, LAS, LAZ, E57).
+* See gather_pcl_msg_ctslam source code for other possible improvements.
