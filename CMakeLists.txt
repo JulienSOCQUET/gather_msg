@@ -143,7 +143,7 @@ catkin_package(
 
 ## Declare a C++ executable
  add_executable(gather_pcl_msg src/gather_pcl_msg.cpp)
- add_executable(gather_pcl_msg_ctslam src/gather_pcl_msg_ctslam.cpp)
+ add_executable(gather_pcl_msg_bag src/gather_pcl_msg_bag.cpp)
 
 ## Add cmake target dependencies of the executable
 ## same as for the library above
@@ -155,7 +155,7 @@ catkin_package(
    ${PCL_LIBRARIES}
    ${Boost_LIBRARIES}
  )
- target_link_libraries(gather_pcl_msg_ctslam
+ target_link_libraries(gather_pcl_msg_bag
    ${catkin_LIBRARIES}
    ${PCL_LIBRARIES}
    ${Boost_LIBRARIES}
@@ -177,7 +177,7 @@ catkin_package(
 # )
 
 ## Mark executables and/or libraries for installation
-install(TARGETS gather_pcl_msg gather_pcl_msg_ctslam
+install(TARGETS gather_pcl_msg gather_pcl_msg_bag
 #   ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
 #   LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
    RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
