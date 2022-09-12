@@ -14,7 +14,9 @@ find_package(catkin REQUIRED COMPONENTS
     tf2_ros
     tf2_msgs
     tf2_sensor_msgs
-    std_msgs)
+    std_msgs
+    laser_geometry
+    )
 find_package(PCL REQUIRED)
 find_package(Eigen REQUIRED)
 find_package(Boost REQUIRED COMPONENTS
@@ -144,6 +146,7 @@ catkin_package(
 ## Declare a C++ executable
  add_executable(gather_pcl_msg src/gather_pcl_msg.cpp)
  add_executable(gather_pcl_msg_bag src/gather_pcl_msg_bag.cpp)
+ add_executable(analyse_pcl_msg_bag src/analyse_pcl_msg_bag.cpp)
 
 ## Add cmake target dependencies of the executable
 ## same as for the library above
@@ -161,6 +164,11 @@ catkin_package(
    ${Boost_LIBRARIES}
    ${Eigen_LIBRARIES}
  )
+ target_link_libraries(analyse_pcl_msg_bag
+   ${catkin_LIBRARIES}
+   ${PCL_LIBRARIES}
+   ${Boost_LIBRARIES}
+ )
 
 #############
 ## Install ##
@@ -171,13 +179,13 @@ catkin_package(
 
 ## Mark executable scripts (Python etc.) for installation
 ## in contrast to setup.py, you can choose the destination
-# install(PROGRAMS
-#   scripts/my_python_script
-#   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
-# )
+install(PROGRAMS
+  scripts/extract_tf.py
+  DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+)
 
 ## Mark executables and/or libraries for installation
-install(TARGETS gather_pcl_msg gather_pcl_msg_bag
+install(TARGETS gather_pcl_msg gather_pcl_msg_bag analyse_pcl_msg_bag
 #   ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
 #   LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
    RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}

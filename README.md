@@ -2,7 +2,7 @@
 This ROS package is used to gather ROS messages in coherent structures (eg. gather PointCloud2 msgs and write them as a pcd file).
 
 ## gather_pcl_msg
-This node is used to gather PCL point clouds messages from a given topic and save the final point cloud to a designated path. This node listens to the topic when it starts and terminates when user input CTRL-C.
+This node is used to gather PointCloud2 messages from a given topic and save the final point cloud to a designated path. This node listens to the topic when it starts and terminates when user input CTRL-C.
 If the cloud data would surpass your memory capacity. Partition feature is available.
 You can read help info by
 ```bash
@@ -25,21 +25,28 @@ Advanced, you can use '-p' or '-o' to assign other folder to save.
 '-t' argument decide frame count interval to divide into seperate partition file. This would be processed in other thread, don't worry about blocking main thread.
 
 ## gather_pcl_msg_bag
-This executable is used to gather PCL point clouds messages from a given topic of a given bag file using a given trajectory (set of poses) and save the final point cloud to a designated path.
+This executable is used to gather PointCloud2 or LaserScan messages from a given topic of a given bag file using a given trajectory (set of poses) and save the final point cloud to a designated path.
 ```bash
-rosrun gather_msg gather_pcl_msg_bag  -h
+rosrun gather_msg gather_pcl_msg_bag  --help
+Usage: gather_pcl_msg_bag BAGFILE [options]
+
+Create a point cloud from a bag file containing scan or point cloud data.
+
 Allowed options:
-  -h [ --help ]         print help message
-  -o [ --output ] arg   explictly output file name
-  -p [ --poses ] arg    poses used to gather the clouds
-  -t [ --topic ] arg    topic to read the cloud msgs
-  --bagfile             bag file to read the cloud msgs
+  --help                       print help message
+  --output OUTPUT              explictly output file name
+  --poses POSES                poses used to gather the clouds
+  --static-transform TRANSFORM (=X Y Z QX QY QZ QW or =X Y Z ROLL PITCH YAW) 
+                               static transform used to gather the clouds, 
+                               applied before the poses
+  --topic TOPIC                topic to read the cloud msgs
+
 ```
 In generally, the minium format of the command line is:
 ```bash
 rosrun gather_msg gather_pcl_msg_bag bagfile.bag
 ```
-Read the bag file, find the topic with PointCloud2 type (fail if several available), gather the points without using any transform and save them to the $PWD directory with the current time as filename.
+Read the bag file, find the topic with PointCloud2 or LaserScan type, gather the points without using any transform and save them to the $PWD directory with the current time as filename.
 
 The trajectory file should provide the transforms as time tx ty tz qw qx qy qz (in this specific order on one line) at a frequency of 100Hz (for now). See the source for all the assumptions.
 
