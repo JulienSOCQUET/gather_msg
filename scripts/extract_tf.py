@@ -6,7 +6,7 @@ import os
 
 parser = ArgumentParser()
 
-parser.add_argument("-b", "--bag_file", dest="bag_file", required=True,
+parser.add_argument("bag_file",
                     help="Name of bag file to extract transforms from.")
 
 parser.add_argument("-f", "--frame_id", dest="frame_id", required=True,
