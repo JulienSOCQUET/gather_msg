@@ -36,35 +36,38 @@ constexpr float Pi {3.14159265358979323846};
 
 
 
-// Structure to store a 2D LiDAR calibration
+// Structure to store an encoder calibration
 struct Calibration
 {
   float offset;
   float eccentricity;
+  float phase;
 
-  Calibration(const float& off = 0, const float& ecc = 0)
-    : offset(off),
-      eccentricity(ecc)
+  Calibration(float offset = 0, float eccentricity = 0, float phase = 0)
+    : offset(offset),
+      eccentricity(eccentricity),
+      phase(phase)
   {
   }
 
   Calibration(const std::vector<float>& calibration)
   {
-    if (calibration.size() == 2)
+    if (calibration.size() == 3)
     {
       offset       = calibration[0];
       eccentricity = calibration[1];
+      phase        = calibration[2];
     }
     else
     {
-      throw std::runtime_error("The calibration vector should contain 2 elements.");
+      throw std::runtime_error("The calibration vector should contain 3 elements.");
     }
   }
 };
 
 inline bool operator==(const Calibration& c1, const Calibration& c2)
 {
-  return c1.offset == c2.offset && c1.eccentricity == c2.eccentricity;
+  return c1.offset == c2.offset && c1.eccentricity == c2.eccentricity && c1.phase == c2.phase;
 }
 
 inline bool operator!=(const Calibration& c1, const Calibration& c2)
@@ -83,7 +86,9 @@ bool getNextTransform(std::ifstream& traj, geometry_msgs::TransformStamped& tran
 {
   std::string pose;
   if(!std::getline(traj, pose))
+  {
     return false;
+  }
   // Assumes that we have: time tx ty tz qw qx qy qz
   std::stringstream ssPose (pose);
   std::string item;
@@ -137,11 +142,11 @@ void toPCL(const sensor_msgs::PointCloud2& cloud, pcl::PCLPointCloud2& cloudPcl,
   pcl_conversions::toPCL(cloud, cloudPcl);
 }
 
-// Class to convert a sensor_msgs::LaserScan to ???
+// Class to convert a sensor_msgs::LaserScan to pcl::PCLPointCloud2
 class LaserProjection
 {
 public:
-  void projectLaser(const sensor_msgs::LaserScan& scanIn, sensor_msgs::PointCloud2& cloudOut, const Calibration& calibration)
+  void projectLaser(const sensor_msgs::LaserScan& scanIn, pcl::PCLPointCloud2& cloudOut, const Calibration& calibration)
   {
     size_t scanSize = scanIn.ranges.size();
     Eigen::ArrayXf ranges(scanSize);
@@ -168,7 +173,7 @@ public:
       for (size_t i = 0; i < scanSize; ++i)
       {
         float angle   = scanIn.angle_min + i * scanIn.angle_increment;
-        angle         = angle + calibration.offset + calibration.eccentricity * sin(angle + Pi / 2);
+        angle         = angle + calibration.offset + calibration.eccentricity * sin(angle + calibration.phase);
         m_XYLut(i, 0) = cos(angle);
         m_XYLut(i, 1) = sin(angle);
       }
@@ -177,9 +182,11 @@ public:
     outputXY  = m_XYLut.colwise() * ranges;
 
     // Set fields of the output cloud
-    cloudOut.header = scanIn.header;
-    cloudOut.height = 1;
-    cloudOut.width  = scanIn.ranges.size ();
+    cloudOut.header.seq      = scanIn.header.seq;
+    cloudOut.header.frame_id = scanIn.header.frame_id;
+    cloudOut.header.stamp    = scanIn.header.stamp.toNSec() / 1000ull;
+    cloudOut.height          = 1;
+    cloudOut.width           = scanIn.ranges.size ();
     cloudOut.fields.resize (7);
     cloudOut.fields[0].name = "x";
     cloudOut.fields[0].offset = 0;
@@ -263,9 +270,7 @@ LaserProjection laserProjection;
 // Convert a sensor_msgs::LaserScan to pcl::PCLPointCloud2
 void toPCL(const sensor_msgs::LaserScan& scan, pcl::PCLPointCloud2& cloudPcl, const Calibration& calibration)
 {
-  sensor_msgs::PointCloud2 cloud;
-  laserProjection.projectLaser(scan, cloud, calibration);
-  pcl_conversions::toPCL(cloud, cloudPcl);
+  laserProjection.projectLaser(scan, cloudPcl, calibration);
 }
 
 
@@ -344,7 +349,8 @@ void mergeAndExport(const rosbag::Bag& bag, const std::string& topic, const std:
         int y_idx = pcl::getFieldIndex (cloudPcl, "y");
         int z_idx = pcl::getFieldIndex (cloudPcl, "z");
         int t_idx = std::max(pcl::getFieldIndex (cloudPcl, "t"), pcl::getFieldIndex (cloudPcl, "time"));
-        if (x_idx == -1 || y_idx == -1 || z_idx == -1 || t_idx == -1) {
+        if (x_idx == -1 || y_idx == -1 || z_idx == -1 || t_idx == -1)
+        {
           std::cerr << "The points need to have x, y, z and t/time attributes." << std::endl;
           return;
         }
@@ -362,7 +368,9 @@ void mergeAndExport(const rosbag::Bag& bag, const std::string& topic, const std:
           {
             lastTransformStamped = transformStamped;
             if(!getNextTransform(traj, transformStamped))
+            {
               break;
+            }
             deltaStamp = (cloudPtr->header.stamp - transformStamped.header.stamp).toSec() + ts;
           }
           
@@ -414,7 +422,8 @@ void mergeAndExport(const rosbag::Bag& bag, const std::string& topic, const std:
 
   // Write point cloud if not empty
   std::cout << "Merged " << cloudOut.width * cloudOut.height << " points." << std::endl;
-  if ((cloudOut.width * cloudOut.height) == 0) {
+  if ((cloudOut.width * cloudOut.height) == 0)
+  {
     std::cout << "Point cloud empty, exit." << std::endl;
     return;
   }
@@ -497,7 +506,7 @@ int main(int argc, char** argv)
     ("output", po::value<std::string>()->value_name("OUTPUT"), "explictly output file name")
     ("trajectory", po::value<std::string>()->value_name("TRAJECTORY"), "trajectory used to gather the clouds")
     ("static-transform", po::value<std::vector<float> >()->multitoken()->value_name("TRANSFORM"), "(=X Y Z QX QY QZ QW or =X Y Z ROLL PITCH YAW) static transform used to gather the clouds, applied before the trajectory")
-    ("calibration", po::value<std::vector<float> >()->multitoken()->value_name("CALIBRATION"), "(=Offset Eccentricity) encoder calibration for 2D LiDARs")
+    ("calibration", po::value<std::vector<float> >()->multitoken()->value_name("CALIBRATION"), "(=Offset Eccentricity Phase) encoder calibration for 2D LiDARs")
     ("topic", po::value<std::string>()->value_name("TOPIC"), "topic to read the cloud msgs");
   po::options_description desc;
   desc.add_options()
@@ -509,49 +518,69 @@ int main(int argc, char** argv)
 
   std::string outputFile, trajFile, topic, bagFile;
   std::vector<float> staticTransform, calibration;
-  try {
+  try
+  {
     po::store(po::command_line_parser(argc, argv).options(desc).style(po::command_line_style::unix_style ^ po::command_line_style::allow_short).positional(p).run(), vm);
     po::notify(vm);
-  } catch (std::exception& e) {
+  }
+  catch (std::exception& e)
+  {
     throw ros::Exception(e.what());
   }
   
-  if (vm.count("help")) {
+  if (vm.count("help"))
+  {
     printHelp(argv[0], visibleDesc);
     exit(0);
   }
-  if (vm.count("output")) {
+  if (vm.count("output"))
+  {
     outputFile = vm["output"].as<std::string>();
-  } else {
+  }
+  else
+  {
     outputFile = getDefaultOutput();
   }
-  if (vm.count("trajectory")) {
+  if (vm.count("trajectory"))
+  {
     trajFile = vm["trajectory"].as<std::string>();
   }
-  if (vm.count("static-transform")) {
+  if (vm.count("static-transform"))
+  {
     staticTransform = vm["static-transform"].as<std::vector<float> >();
-    if (staticTransform.size() != 6 && staticTransform.size() != 7) {
+    if (staticTransform.size() != 6 && staticTransform.size() != 7)
+    {
       printHelp(argv[0], visibleDesc);
       exit(0);
     }
-  } else {
+  }
+  else
+  {
     staticTransform = std::vector<float>({0, 0, 0, 0, 0, 0, 1});
   }
-  if (vm.count("calibration")) {
+  if (vm.count("calibration"))
+  {
     calibration = vm["calibration"].as<std::vector<float> >();
-    if (calibration.size() != 2) {
+    if (calibration.size() != 3)
+    {
       printHelp(argv[0], visibleDesc);
       exit(0);
     }
-  } else {
-    calibration = std::vector<float>({0, 0});
   }
-  if (vm.count("topic")) {
+  else
+  {
+    calibration = std::vector<float>({0, 0, 0});
+  }
+  if (vm.count("topic"))
+  {
     topic = vm["topic"].as<std::string>();
   }
-  if (vm.count("bagfile")) {
+  if (vm.count("bagfile"))
+  {
     bagFile = vm["bagfile"].as<std::string>();
-  } else {
+  }
+  else
+  {
     printHelp(argv[0], visibleDesc);
     exit(0);
   }
