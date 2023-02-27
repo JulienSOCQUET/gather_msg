@@ -446,7 +446,7 @@ Eigen::Affine3d toAffine (const std::vector<float>& transform)
   Eigen::Translation3d t(transform[0], transform[1], transform[2]);
   if (transform.size() == 7)
   {
-    q = Eigen::Quaterniond(transform[6], transform[3], transform[4], transform[5]); // w x y z
+    q = Eigen::Quaterniond(transform[3], transform[4], transform[5], transform[6]); // w x y z
   }
   else if (transform.size() == 6)
   {
@@ -505,7 +505,7 @@ int main(int argc, char** argv)
     ("help", "print help message")
     ("output", po::value<std::string>()->value_name("OUTPUT"), "explictly output file name")
     ("trajectory", po::value<std::string>()->value_name("TRAJECTORY"), "trajectory used to gather the clouds")
-    ("static-transform", po::value<std::vector<float> >()->multitoken()->value_name("TRANSFORM"), "(=X Y Z QX QY QZ QW or =X Y Z ROLL PITCH YAW) static transform used to gather the clouds, applied before the trajectory")
+    ("static-transform", po::value<std::vector<float> >()->multitoken()->value_name("TRANSFORM"), "(=X Y Z QW QX QY QZ or =X Y Z ROLL PITCH YAW) static transform used to gather the clouds, applied before the trajectory")
     ("calibration", po::value<std::vector<float> >()->multitoken()->value_name("CALIBRATION"), "(=Offset Eccentricity Phase) encoder calibration for 2D LiDARs")
     ("topic", po::value<std::string>()->value_name("TOPIC"), "topic to read the cloud msgs");
   po::options_description desc;
@@ -556,7 +556,7 @@ int main(int argc, char** argv)
   }
   else
   {
-    staticTransform = std::vector<float>({0, 0, 0, 0, 0, 0, 1});
+    staticTransform = std::vector<float>({0, 0, 0, 1, 0, 0, 0});
   }
   if (vm.count("calibration"))
   {
